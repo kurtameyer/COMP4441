@@ -1,0 +1,347 @@
+---
+title: "Final"
+author: "Kurt Meyer & Antonio Dehesa"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+
+
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+
+
+```
+
+## Introduction
+
+Our research focuses on the relationship between the inflation rate and crime rates, as well as the type of crime and its rate relative to the inflation. 
+With this information, we would like to know if it is possible to predict an increase in crime and type of crime based on inflation rates. 
+
+To measure the inflation rates, we used the Consumer Price Index (CPI) as our main metric, which is the measure of the average change in the prices paid by urban consumers for a market basket of consumer goods and services. 
+The way CPI is calculated is: Value of Basket in the current year over the value of the basket in the prior year, times 100.
+
+
+Data Sources and Definitions Explained
+
+We based our research on data obtained from the St. Louis Federal Reserve [1] for the inflation rates data. Specifically, a dataset which includes data from the 1960s to the current era. 
+As for crime rates, as well as types of crime, we obtained this information from the FBI Uniform Crime Reporting [2] dataset, which was supplemented with data obtained through Statista [3], for which we have access thanks to our student access through the University of Denver. 
+Unfortunately, the FBI datasets are split by year, which would take too much time to put everything together. Fortunately, we could use disastercenter [4], which presents the same information already gathered.
+
+[1]: https://fred.stlouisfed.org/
+[2]: https://cde.ucr.cjis.gov/
+[3]: https://www.statista.com
+[4]: https://www.disastercenter.com/
+
+Main Features of the Data Sets
+
+We will first have to load the datasets and perform data cleaning. 
+
+Rape statistics cannot be trusted, as prior to 2016, the FBI included only female-reported rapes, and from 2016 and forward, they included both male and female reported rapes. Therefore, we will not use it for our analysis, as it shows a massive jump in reports.
+```{r}
+# We load our datasets, clean them and join them into a single dataframe, for easier handling
+Tot_Pop <- read.csv("./TotalPopulation1960to2020.csv")
+Tot_Pop$DATE <- as.numeric(format(as.Date(Tot_Pop$DATE), "%Y"))
+CPI <- read.csv("./FPCPITOTLZGUSA.csv")
+CPI$DATE <- as.numeric(format(as.Date(CPI$DATE), "%Y"))
+
+crimes <- read.csv("./crimes.csv")
+names(crimes)[11] = "Larceny theft"
+names(crimes)[12] = "Vehicle theft"
+crimes <- filter(crimes,Year <= 2019)
+Tot_Pop <- filter(Tot_Pop,DATE <= 2019)
+CPI <- filter(CPI,DATE <= 2019)
+
+dat <- cbind(CPI, Tot_Pop$POPTOTUSA647NWDB, crimes[,3:ncol(crimes)])
+
+# Now we can remove the original datasets to avoid memory issues
+rm(CPI)
+rm(Tot_Pop)
+rm(crimes)
+# We rename some columns for easier handling
+names(dat)[1:3] = c("Date", "CPI", "Tot_Pop")
+# Now, we get additional derived metrics which might be helpful 
+
+
+inf_rate <- (dat$CPI) 
+
+
+crime_percentage <- dat$Total/dat$Tot_Pop * 100
+dat <- cbind(dat, inf_rate, crime_percentage)
+
+# Finally, we should remove outliers. For example, inflation for most years stays within 100%, except for some years, in which inflation reached over 500%. 
+mean_inf_rate <- mean(dat$inf_rate)
+sd_inf_rate <- sd(dat$inf_rate)
+# We will use only data that is within 3 standard deviations for the inflation rate
+dat <- filter(dat, between(inf_rate, -3*sd_inf_rate, 3*sd_inf_rate))
+
+head(dat, n = 5)
+
+
+```
+Below are several graphical depictions of the data set. They do seem to all follow roughly the same shape, an indication of normality. 
+```{r}
+CPI_Plot <- ggplot(dat, aes(x = Date, y = CPI)) +
+  geom_line() +
+  labs(title = "Consumer Price Index Change", x = "Year", y = "CPI")
+
+
+Property_Plot <- ggplot(dat, aes(x = Date, y = Property)) +
+  geom_line() +
+  labs(title = "Property Crime Over Time", x = "Year", y = "Number of Property Incidents")
+
+Murder_Plot <- ggplot(dat, aes(x = Date, y = Murder)) +
+  geom_line() +
+  labs(title = "Murder Over Time", x = "Year", y = "Number of Murder Incidents")
+
+Violent_Plot <- ggplot(dat, aes(x = Date, y = Violent)) +
+  geom_line() +
+  labs(title = "Violent Crime Over Time", x = "Year", y = "Number of Violebt Incidents")
+
+Burglary_Plot <- ggplot(dat, aes(x = Date, y = Burglary)) +
+  geom_line() +
+  labs(title = "Burglary Over Time", x = "Year", y = "Total Number of Burglary Incidents")
+
+Total_Plot <- ggplot(dat, aes(x = Date, y = Total)) +
+  geom_line() +
+  labs(title = "Total Crime Over Time", x = "Year", y = "Total Number of Incidents")
+
+
+
+CPI_Plot
+Property_Plot
+Violent_Plot
+Murder_Plot
+Burglary_Plot
+Total_Plot
+
+```
+
+Data Visualization 
+
+In this section we will plot our inflation data on the x axis against different crime data on the y axis. 
+
+```{r}
+# With the previously obtained information, we can visualize tot_crime vs inflation
+#ggplot(data= dat, mapping = aes(x = inf_rate, y = Total))+
+#  geom_point()
+ggplot(data= dat, mapping = aes(x = inf_rate, y = Total))+
+  geom_hline(yintercept = min(dat$Total),color="gray")+
+  geom_line()
+```
+We visualize the rate of crime per year by population vs inflation rate to see if the difference in population may be related
+
+```{r}
+ggplot(data= dat, mapping = aes(x = inf_rate, y = crime_percentage))+
+  geom_hline(yintercept = min(dat$crime_percentage),color="gray")+
+  geom_line()
+```
+We now should focus on crimes related to money and resources. In this dataset, these crimes would be: Property, Robbery, Burglary, Larceny theft and Vehicle theft, which are summarized by the Property type of crime. 
+
+```{r}
+ggplot(data= dat, mapping = aes(x = inf_rate, y = Property))+
+  geom_hline(yintercept = min(dat$Property),color="gray")+
+  geom_vline(xintercept = mean(dat$inf_rate),color="red")+
+  geom_line()
+```
+
+
+
+We can also try to see any relation with the percentage of financial-type crimes relative to the total amount of crimes per year vs inflation rates: 
+
+```{r}
+ggplot(data= dat, mapping = aes(x = inf_rate, y = Property/Total))+
+  geom_hline(yintercept = min(dat$Property / dat$Total),color="gray")+
+  geom_line()
+```
+
+As we can see, there may be a relationship between inflation and crime; however, it is uncertain how much of a relationship there. This is why it would be useful to perform a series of correlation tests. Prior to performing these tests, let's determine whether our data is normal using qqplots. If so, we will use the Pearson Correlation Test. 
+```{r}
+qqnorm(dat$CPI)
+qqline(dat$CPI)
+
+qqnorm(dat$Total)
+qqline(dat$Total)
+
+qqnorm(dat$Property)
+qqline(dat$Property)
+
+qqnorm(dat$Violent)
+qqline(dat$Violent)
+
+qqnorm(dat$Murder)
+qqline(dat$Murder)
+
+
+
+```
+
+ Now we will perform a series of correlation tests, using the Pearson method. First we will use the raw data and then utilize data converted to crimes per 100,000.
+```{r}
+
+#Pearson Correlations with Raw Data
+
+
+cor.test(dat$inf_rate, dat$Total)
+cor.test(dat$inf_rate, dat$Property)
+cor.test(dat$inf_rate, dat$Murder)
+cor.test(dat$inf_rate, dat$Violent)
+cor.test(dat$inf_rate, dat$Burglary)
+```
+
+
+
+
+The correlation tests in most cases show p-values less than .05 (the exception being violent crime) with varying correlation coefficients often showing a weak or moderate relationship. The strongest correlations seem to be between inflation and property crimes, specifically burglary. Let's convert out data to crimes per 100,000. And run the correlation tests again on property crimes. 
+```{r}
+
+
+convert_to_per_capita <- function(data) {
+  # Find the column index for the "Tot_Pop" column
+  pop_col <- grep("Tot_Pop", colnames(data))
+  # If no "Tot_Pop" column is found, return the original data
+  if (length(pop_col) == 0) {
+    return(data)
+  }
+  # Divide all columns after "Tot_Pop" by population and multiply by 100,000
+  for (i in (pop_col+1):ncol(data)) {
+    data[, i] <- (data[, i] / data[, pop_col]) * 100000
+  }
+  
+  return(data)
+}
+
+dat_converted <- convert_to_per_capita(dat)
+dat_converted
+
+```
+
+```{r}
+cor.test(dat$inf_rate, dat_converted$Total)
+cor.test(dat$inf_rate, dat_converted$Property)
+cor.test(dat$inf_rate, dat_converted$Murder)
+cor.test(dat$inf_rate, dat_converted$Violent)
+cor.test(dat$inf_rate, dat_converted$Burglary)
+```
+After converting the data to account for population changes we see even stronger correlations using the Pearson test. The Pearson test seems to be the most appropriate test given the normality of the data.  
+
+Determining Methods for Forecasting
+
+Thus far our results have been promising. After working with this data we have determined that a time series analysis would be useful for predicting future crime rates based on inflation. We came across the Granger test in our research which can be helpful in terms of determing the predictive value of these data and whether it is worth performing a time series analysis. Based on the p-values we generated we believe there is enough predictive values to perform a time series on this data.  
+```{r}
+
+
+
+# Load the vars package
+library(lmtest)
+library(vars)
+# Create a dataframe with the two variables
+data <- data.frame(inf_rate = c(1.5, 2.0, 2.5, 2.2, 2.8),
+                   property_crime = c(100, 120, 110, 115, 130))
+
+# Specify the variables as a VAR model
+model <- VAR(dat_converted, p = 2, type = "const")
+grangertest(inf_rate ~ Property, order = 3, data = dat_converted)
+grangertest(inf_rate ~ Burglary, order = 3, data = dat_converted)
+grangertest(inf_rate ~ Total, order = 3, data = dat)
+
+
+
+```
+
+### Description of what our model does and how the algorith works
+
+### Major Data analysis and modeling
+
+Now that we have established a strong correlation we can experiment with predictive models. First, we will use Facebook prophet which is a forecasting package developed to improve upon existing prediction tools commonly found in R and Python. Due to Prophet's requirements, this process requires some data preparation. 
+
+
+```{r}
+dat_converted
+```
+
+```{r}
+#Prophet requires the data to be formatted in a certain way. 
+library(lubridate)
+#Create formatted dataframes for making predictions
+df_model1 <- dat_converted[, c('Date', 'CPI', 'Property')]
+colnames(df_model1) <- c('ds', 'CPI', 'y')
+df_model1$ds <- as.Date(paste0(df_model1$ds, "-01-01"), format = "%Y-%m-%d")
+df_model2 <- dat_converted[, c('Date', 'CPI', 'Total')]
+colnames(df_model2) <- c('ds', 'CPI', 'y')
+df_model2$ds <- as.Date(paste0(df_model2$ds, "-01-01"), format = "%Y-%m-%d")
+
+
+```
+```{r}
+library (prophet)
+
+
+```
+
+This is a prophet model based on "df_model1", which uses CPI as a regressor to predict Property crimes. Prophet uses a variety of methods but essentially is a high-powered Bayesian tool.Based on the output I'm guessing there is an overfitting problem here but I'm not sure how to fix it. 
+```{r}
+model <- prophet()
+
+#Use CPI as a regressor
+model <- add_regressor(model, 'CPI')
+model <- fit.prophet(model, df_model1)
+
+future <- make_future_dataframe(model, periods = 9, freq = 'years')
+future$CPI <- c(1.2, 7.0, 6.9, 5.0, 3.0, 4.0, 1.0, 0.2)
+forecast <- predict(model, future)
+
+forecast
+
+
+plot(model, forecast)
+
+```
+Model 2 attempts to predict based on total crime. The model seems to track observed data pretty well. It predicts crime will spike with inflation then go back down with inflation. Here we are entering inflation values based on unofficial inflation numbers. The model predicts that total crime will increase as inflation increases. 
+```{r}
+model <- prophet()
+
+# add CPI as a regressor
+model <- add_regressor(model, 'CPI')
+model <- fit.prophet(model, df_model2)
+
+future <- make_future_dataframe(model, periods = 9, freq = 'years')
+future$CPI <- c(1.2, 7.0, 6.9, 5.0, 3.0, 4.0, 6.0, 7.2)
+forecast <- predict(model, future)
+
+forecast
+plot(model, forecast)
+```
+Next we will perform a simple VAR autogression to this data. 
+```{r}
+
+# Load the vars package
+library(vars)
+library(lubridate)
+library(dplyr)
+library (forecast)
+
+
+property_inf <- dat_converted[, c("Property", "CPI")]
+
+model_inf <- VAR(property_inf, p = 3, type = "const")
+
+forecast_inf <- predict(model_inf, n.ahead = 3, newdata = data.frame(inf_rate = c(1.0, 3.1, 7)))
+
+
+forecast_inf
+
+
+
+```
+
+
+### Model Evaluation / Model Selection / Model Comparison
+
+### Conclusion
