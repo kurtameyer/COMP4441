@@ -15,7 +15,15 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(knitr)
 library(ggplot2)
-
+# Load the vars package
+library(lmtest)
+library(vars)
+# Required for the data format for prophet
+library(lubridate)
+library (prophet)
+# Load the vars package
+library(dplyr)
+library (forecast)
 
 ```
 
@@ -129,8 +137,7 @@ In this section we will plot our inflation data on the x axis against different 
 
 ```{r}
 # With the previously obtained information, we can visualize tot_crime vs inflation
-#ggplot(data= dat, mapping = aes(x = inf_rate, y = Total))+
-#  geom_point()
+
 ggplot(data= dat, mapping = aes(x = inf_rate, y = Total))+
   geom_hline(yintercept = min(dat$Total),color="gray")+
   geom_line()
@@ -161,7 +168,7 @@ ggplot(data= dat, mapping = aes(x = inf_rate, y = Property/Total))+
   geom_line()
 ```
 
-As we can see, there may be a relationship between inflation and crime; however, it is uncertain how much of a relationship there. This is why it would be useful to perform a series of correlation tests. Prior to performing these tests, let's determine whether our data is normal using qqplots. If so, we will use the Pearson Correlation Test. 
+As we can see, there may be a relationship between inflation and crime; however, it is uncertain how much of a relationship there is. This is why it would be useful to perform a series of correlation tests. Prior to performing these tests, let's determine whether our data is normal using qqplots. If so, we will use the Pearson Correlation Test. 
 ```{r}
 qqnorm(dat$CPI)
 qqline(dat$CPI)
@@ -233,14 +240,8 @@ After converting the data to account for population changes we see even stronger
 
 Determining Methods for Forecasting
 
-Thus far our results have been promising. After working with this data we have determined that a time series analysis would be useful for predicting future crime rates based on inflation. We came across the Granger test in our research which can be helpful in terms of determing the predictive value of these data and whether it is worth performing a time series analysis. Based on the p-values we generated we believe there is enough predictive values to perform a time series on this data.  
+Thus far our results have been promising. After working with this data we have determined that a time series analysis would be useful for predicting future crime rates based on inflation. We came across the Granger test in our research which can be helpful in terms of determining the predictive value of these data and whether it is worth performing a time series analysis. Based on the p-values we generated we believe there is enough predictive values to perform a time series on this data.  
 ```{r}
-
-
-
-# Load the vars package
-library(lmtest)
-library(vars)
 # Create a dataframe with the two variables
 data <- data.frame(inf_rate = c(1.5, 2.0, 2.5, 2.2, 2.8),
                    property_crime = c(100, 120, 110, 115, 130))
@@ -250,8 +251,6 @@ model <- VAR(dat_converted, p = 2, type = "const")
 grangertest(inf_rate ~ Property, order = 3, data = dat_converted)
 grangertest(inf_rate ~ Burglary, order = 3, data = dat_converted)
 grangertest(inf_rate ~ Total, order = 3, data = dat)
-
-
 
 ```
 
@@ -268,7 +267,6 @@ dat_converted
 
 ```{r}
 #Prophet requires the data to be formatted in a certain way. 
-library(lubridate)
 #Create formatted dataframes for making predictions
 df_model1 <- dat_converted[, c('Date', 'CPI', 'Property')]
 colnames(df_model1) <- c('ds', 'CPI', 'y')
@@ -276,11 +274,6 @@ df_model1$ds <- as.Date(paste0(df_model1$ds, "-01-01"), format = "%Y-%m-%d")
 df_model2 <- dat_converted[, c('Date', 'CPI', 'Total')]
 colnames(df_model2) <- c('ds', 'CPI', 'y')
 df_model2$ds <- as.Date(paste0(df_model2$ds, "-01-01"), format = "%Y-%m-%d")
-
-
-```
-```{r}
-library (prophet)
 
 
 ```
@@ -320,13 +313,6 @@ plot(model, forecast)
 ```
 Next we will perform a simple VAR autogression to this data. 
 ```{r}
-
-# Load the vars package
-library(vars)
-library(lubridate)
-library(dplyr)
-library (forecast)
-
 
 property_inf <- dat_converted[, c("Property", "CPI")]
 
